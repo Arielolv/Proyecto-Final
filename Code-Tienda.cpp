@@ -3,6 +3,7 @@
 #include <vector>
 
 using namespace std;
+
 // UTILIDADES GENERALES
 
 int leerOpcion() {
@@ -66,7 +67,7 @@ public:
     void agregarPedido(int pedidoId) { historialPedidosIds.push_back(pedidoId); }
     const vector<int>& getHistorial() const { return historialPedidosIds; }
 
-    string getTipo() const override { return "Cliente"; } // NUEVO
+    string getTipo() const override { return "Cliente"; }
 
     void mostrarInfo() const override {
         cout << "  Cliente -> ID: " << id << " | Cedula: " << cedula 
@@ -741,17 +742,288 @@ bool flujoAgregarProductos(CarritoDeCompras& carrito, Inventario& inv) {
     return !carrito.estaVacio();
 }
 
-// DEMOSTRACION
+// MENUS POR ROL
+
+void menuCliente(Cliente* cliente, Tienda& tienda) {
+    CarritoDeCompras carrito(cliente);
+    int op;
+    do {
+        cout << "\n  ----------------------------------------------\n"
+             << "  MENU CLIENTE - " << cliente->getNombre() << "\n"
+             << "  ----------------------------------------------\n"
+             << "  1. Ver productos disponibles\n"
+             << "  2. Agregar producto al carrito\n"
+             << "  3. Ver mi carrito\n"
+             << "  4. Realizar pedido (checkout)\n"
+             << "  0. Cerrar sesion\n"
+             << "  Opcion: ";
+        op = leerOpcion();
+
+        if (op == 1) {
+            tienda.getInventario().listarProductos();
+
+        } else if (op == 2) {
+            tienda.getInventario().listarProductos();
+            cout << "  ID del producto: ";
+            int pid = leerOpcion();
+            Producto* p = tienda.getInventario().buscarProducto(pid);
+            if (!p) { cout << "  Producto no encontrado.\n"; continue; }
+            cout << "  Cantidad: ";
+            int cant = leerOpcion();
+            carrito.agregarItem(p, cant);
+
+        } else if (op == 3) {
+            carrito.mostrarCarrito();
+
+        } else if (op == 4) {
+            if (carrito.estaVacio()) {
+                cout << "  El carrito esta vacio. Agregue productos primero.\n";
+                continue;
+            }
+            carrito.mostrarCarrito();
+            cout << "  Confirmar pedido? (1-Si / 0-No): ";
+            if (leerOpcion() != 1) continue;
+
+            Pedido* pedido = tienda.crearPedido(carrito, fechaHoy());
+            if (!pedido) continue;
+
+            Pago* pago = solicitarPago(pedido->getTotal());
+            if (pago) tienda.procesarPago(pedido, pago);
+            else      cout << "  Pago cancelado.\n";
+
+        } else if (op != 0) {
+            cout << "  Opcion no valida.\n";
+        }
+
+    } while (op != 0);
+    cout << "  Sesion cerrada. Hasta pronto, " << cliente->getNombre() << ".\n";
+}
+
+void menuVendedor(Vendedor* vendedor, Tienda& tienda) {
+    int op;
+    do {
+        cout << "\n  ----------------------------------------------\n"
+             << "  MENU VENDEDOR - " << vendedor->getNombre() << "\n"
+             << "  ----------------------------------------------\n"
+             << "  1. Ver inventario\n"
+             << "  2. Registrar venta (pedido para un cliente)\n"
+             << "  3. Ver todos los pedidos\n"
+             << "  4. Consultar mis comisiones\n"
+             << "  0. Cerrar sesion\n"
+             << "  Opcion: ";
+        op = leerOpcion();
+
+        if (op == 1) {
+            tienda.getInventario().listarProductos();
+
+        } else if (op == 2) {
+            string ced = leerTexto("  Cedula del cliente: ");
+            Cliente* cliente = tienda.getGestorClientes().buscarClientePorCedula(ced);
+
+            if (!cliente) {
+                cout << "  Cliente no encontrado.\n"
+                     << "  Desea registrarlo ahora? (1-Si / 0-No): ";
+                if (leerOpcion() == 1) {
+                    if (tienda.cedulaRegistrada(ced)) {
+                        cout << "  Esa cedula ya esta registrada en otro perfil.\n";
+                        continue;
+                    }
+                    string nom   = leerTexto("  Nombre completo: ");
+                    string email = leerTexto("  Email: ");
+                    string tel   = leerTexto("  Telefono: ");
+                    string dir   = leerTexto("  Direccion: ");
+                    cliente = tienda.getGestorClientes().registrarCliente(ced, nom, email, tel, dir);
+                } else {
+                    continue;
+                }
+            }
+
+            cout << "  Cliente: " << cliente->getNombre() << "\n";
+            CarritoDeCompras carrito(cliente);
+
+            if (!flujoAgregarProductos(carrito, tienda.getInventario())) {
+                cout << "  Venta cancelada (carrito vacio).\n";
+                continue;
+            }
+
+            carrito.mostrarCarrito();
+            cout << "  Confirmar pedido? (1-Si / 0-No): ";
+            if (leerOpcion() != 1) continue;
+
+            Pedido* pedido = tienda.crearPedido(carrito, fechaHoy());
+            if (!pedido) continue;
+
+            Pago* pago = solicitarPago(pedido->getTotal());
+            if (pago) {
+                tienda.procesarPago(pedido, pago);
+                vendedor->registrarVenta(pedido->getId(), pedido->getTotal());
+                cout.setf(ios::fixed); cout.precision(2);
+                cout << "  Comision generada por esta venta: $"
+                     << pedido->getTotal() * vendedor->getPorcentajeComision() / 100.0 << "\n";
+            } else {
+                cout << "  Pago cancelado.\n";
+            }
+
+        } else if (op == 3) {
+            tienda.listarPedidos();
+
+        } else if (op == 4) {
+            vendedor->mostrarComisiones();
+
+        } else if (op != 0) {
+            cout << "  Opcion no valida.\n";
+        }
+
+    } while (op != 0);
+    cout << "  Sesion cerrada. Hasta pronto, " << vendedor->getNombre() << ".\n";
+}
+
+void menuAdmin(Administrador* admin, Tienda& tienda) {
+    int op;
+    do {
+        cout << "\n  ----------------------------------------------\n"
+             << "  MENU ADMINISTRADOR - " << admin->getNombre()
+             << " (" << admin->getNivel() << ")\n"
+             << "  ----------------------------------------------\n"
+             << "  1. Ver inventario\n"
+             << "  2. Agregar producto al inventario\n"
+             << "  3. Ver clientes registrados\n"
+             << "  4. Eliminar cliente\n"
+             << "  5. Ver todos los pedidos\n"
+             << "  6. Resumen de la tienda\n"
+             << "  7. Reporte de ventas\n"
+             << "  8. Registrar nuevo vendedor\n"
+             << "  9. Ver vendedores y comisiones\n"
+             << "  0. Cerrar sesion\n"
+             << "  Opcion: ";
+        op = leerOpcion();
+
+        if (op == 1) {
+            tienda.getInventario().listarProductos();
+        } else if (op == 2) {
+            string nom  = leerTexto("  Nombre del producto: ");
+            string desc = leerTexto("  Descripcion: ");
+            string cat  = leerTexto("  Categoria: ");
+            double precio;
+            int    stock;
+            cout << "  Precio: $";
+            cin >> precio; cin.ignore(1000, '\n');
+            cout << "  Stock inicial: ";
+            cin >> stock; cin.ignore(1000, '\n');
+            tienda.getInventario().agregarProducto(nom, desc, precio, stock, cat);
+        } else if (op == 3) {
+            tienda.getGestorClientes().listarClientes();
+        } else if (op == 4) {
+            tienda.getGestorClientes().listarClientes();
+            cout << "  ID del cliente a eliminar: ";
+            int id = leerOpcion();
+            if (!tienda.getGestorClientes().eliminarCliente(id))
+                cout << "  Cliente no encontrado.\n";
+        } else if (op == 5) {
+            tienda.listarPedidos();
+        } else if (op == 6) {
+            tienda.mostrarResumen();
+        } else if (op == 7) {
+            tienda.generarReporteVentas();
+        } else if (op == 8) {
+            string ced = leerTexto("  Cedula del nuevo vendedor: ");
+            if (tienda.cedulaRegistrada(ced)) {
+                cout << "  Esa cedula ya esta registrada en el sistema.\n";
+                continue;
+            }
+            string nom   = leerTexto("  Nombre: ");
+            string email = leerTexto("  Email: ");
+            string tel   = leerTexto("  Telefono: ");
+            double porc;
+            cout << "  Porcentaje de comision (ej. 5.0): ";
+            cin >> porc; cin.ignore(1000, '\n');
+            tienda.registrarVendedor(ced, nom, email, tel, porc);
+        } else if (op == 9) {
+            tienda.listarVendedores();
+        } else if (op != 0) {
+            cout << "  Opcion no valida.\n";
+        }
+
+    } while (op != 0);
+    cout << "  Sesion cerrada. Hasta pronto, " << admin->getNombre() << ".\n";
+}
+
+void menuPrincipal(Tienda& tienda) {
+    int op;
+    do {
+        cout << "\n  ----------------------------------------------\n"
+             << "  AGROFRESH ECUADOR - Sistema de Gestion\n"
+             << "  ----------------------------------------------\n"
+             << "  1. Ingresar con cedula\n"
+             << "  2. Registrarse como cliente\n"
+             << "  0. Salir\n"
+             << "  Opcion: ";
+        op = leerOpcion();
+
+        if (op == 1) {
+            string ced = leerTexto("  Ingrese su cedula: ");
+            string tipo;
+            Usuario* u = tienda.buscarPorCedula(ced, tipo);
+
+            if (!u) {
+                cout << "  Cedula no encontrada.\n"
+                     << "  Si no tiene cuenta, seleccione la opcion 2 para registrarse.\n";
+                continue;
+            }
+
+            cout << "  Bienvenido/a, " << u->getNombre() << " - " << tipo << "\n";
+
+            if      (tipo == "Administrador") menuAdmin   (static_cast<Administrador*>(u), tienda);
+            else if (tipo == "Vendedor")      menuVendedor(static_cast<Vendedor*>(u),      tienda);
+            else if (tipo == "Cliente")       menuCliente (static_cast<Cliente*>(u),       tienda);
+
+        } else if (op == 2) {
+            string ced = leerTexto("  Ingrese su cedula: ");
+            if (tienda.cedulaRegistrada(ced)) {
+                cout << "  Esa cedula ya se encuentra registrada.\n"
+                     << "  Por favor ingrese con la opcion 1.\n";
+                continue;
+            }
+            string nom   = leerTexto("  Nombre completo: ");
+            string email = leerTexto("  Email: ");
+            string tel   = leerTexto("  Telefono: ");
+            string dir   = leerTexto("  Direccion: ");
+            tienda.getGestorClientes().registrarCliente(ced, nom, email, tel, dir);
+            cout << "  Registro exitoso. Ya puede ingresar con su cedula.\n";
+
+        } else if (op != 0) {
+            cout << "  Opcion no valida.\n";
+        }
+
+    } while (op != 0);
+
+    cout << "\n  Gracias por usar AgroFresh Ecuador. Hasta pronto.\n";
+}
+
+// MAIN y Datos Iniciales
 
 int main() {
-    cout << "|  AGROFRESH ECUADOR - SISTEMA DE GESTION DE VENTAS |\n";
-
     Tienda tienda("AgroFresh Ecuador");
 
-    Administrador* admin = tienda.registrarAdmin("1700000001", "Carlos Andrade", "carlos@agrofresh.ec", "0987654321", "GERENTE");
-    tienda.setAdminActivo(admin);
-
-    GestorClientes& gc = tienda.getGestorClientes();
+    // Datos iniciales cargados en memoria
+    tienda.registrarAdmin("1700000001", "Carlos Andrade", "carlos@agrofresh.ec", "0987654321", "GERENTE");
+    tienda.registrarVendedor("1700000002", "Maria Lopez", "maria@agrofresh.ec", "0991111222", 5.0);
     
-    Cliente* c1 = gc.registrarCliente("1700000003", "Ana Martinez", "ana@gmail.com", "0991234567", "Quito Norte");
-    Cliente* c2 = gc.registrarCliente("1700000004", "Luis Garcia", "luis@gmail.com", "0992345678", "Guayaquil");
+    tienda.getGestorClientes().registrarCliente("1700000003", "Ana Martinez", "ana@gmail.com", "0991234567", "Quito Norte");
+    tienda.getGestorClientes().registrarCliente("1700000004", "Luis Garcia", "luis@gmail.com", "0992345678", "Guayaquil");
+
+    tienda.getInventario().agregarProducto("Manzanas Premium", "Manzanas rojas seleccionadas - 10kg", 24.99, 50, "Frutas");
+    tienda.getInventario().agregarProducto("Bolsa de Quinua Organica", "Quinua blanca 1kg", 5.99, 100, "Granos");
+    tienda.getInventario().agregarProducto("Bananos", "Bananos frescos de la Costa - 20kg", 12.50, 30, "Frutas");
+
+    cout << "\n  Cedulas de prueba:\n"
+         << "  - Administrador : 1700000001\n"
+         << "  - Vendedor      : 1700000002\n"
+         << "  - Cliente Ana   : 1700000003\n"
+         << "  - Cliente Luis  : 1700000004\n";
+
+    // Arrancamos el sistema interactivo
+    menuPrincipal(tienda);
+
+    return 0;
+}
