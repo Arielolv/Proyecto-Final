@@ -4,40 +4,42 @@
 
 using namespace std;
 
-//  MODULO 1 – USUARIOS (Cliente, Administrador)
+//  MODULO 1 – USUARIOS
 
 class Usuario {
 protected:
     int id;
+    string cedula;
     string nombre;
     string email;
     string telefono;
     static int contadorId;
 
 public:
-    Usuario(const string& n, const string& e, const string& t)
-        : id(++contadorId), nombre(n), email(e), telefono(t) {}
+    Usuario(const string& ced, const string& n, const string& e, const string& t)
+        : id(++contadorId), cedula(ced), nombre(n), email(e), telefono(t) {}
     virtual ~Usuario() {}
 
     int getId() const { return id; }
+    string getCedula() const { return cedula; }
     string getNombre() const { return nombre; }
     string getEmail() const { return email; }
     string getTelefono() const { return telefono; }
 
-    virtual void mostrarInfo() const {
-        cout << "ID: " << id << " Nombre: " << nombre << " Email: " << email << " Tel: " << telefono << "\n";
-    }
+    virtual void mostrarInfo() const = 0;
+    virtual string getTipo() const = 0;
+
 };
 int Usuario::contadorId = 0;
 
 class Cliente : public Usuario {
 private:
     string direccion;
-    vector<int> historialPedidosIds; // guarda IDs de pedidos
+    vector<int> historialPedidosIds;
 
 public:
-    Cliente(const string& n, const string& e, const string& t, const string& d)
-        : Usuario(n, e, t), direccion(d) {}
+    Cliente(const string& ced, const string& n, const string& e, const string& t, const string& d)
+        : Usuario(ced, n, e, t), direccion(d) {}
 
     void setDireccion(const string& d) { direccion = d; }
     string getDireccion() const { return direccion; }
@@ -45,28 +47,36 @@ public:
     void agregarPedido(int pedidoId) { historialPedidosIds.push_back(pedidoId); }
     const vector<int>& getHistorial() const { return historialPedidosIds; }
 
+    string getTipo() const override { return "Cliente"; } // NUEVO
+
     void mostrarInfo() const override {
-        cout << "Cliente -> ID: " << id << " Nombre: " << nombre << " Email: " << email
-             << " Tel: " << telefono << " Dir: " << direccion << "\n";
+        cout << "  Cliente -> ID: " << id << " | Cedula: " << cedula 
+             << " | Nombre: " << nombre << " | Email: " << email
+             << " | Tel: " << telefono << " | Dir: " << direccion << "\n";
     }
 };
 
-class Administrador : public Usuario {
+// Administrador 
+
+class Administrador : public Empleado {
 private:
     string nivel;
 public:
-    Administrador(const string& n, const string& e, const string& t, const string& niv)
-        : Usuario(n, e, t), nivel(niv) {}
+    // Fíjate que ahora llamamos a Empleado y le pasamos "Administrador" como su cargo fijo
+    Administrador(const string& ced, const string& n, const string& e,
+                  const string& t, const string& niv)
+        : Empleado(ced, n, e, t, "Administrador"), nivel(niv) {}
 
-    string getPermisos() const { return "Nivel: " + nivel; }
-
-    void gestionar(const string& accion) {
-        cout << "Admin " << nombre << " ejecuta: " << accion << "\n";
-    }
+    string getNivel() const { return nivel; }
+    string getTipo()  const override { return "Administrador"; }
 
     void mostrarInfo() const override {
-        cout << "Admin -> ID: " << id << " Nombre: " << nombre << " Email: " << email
-             << " Tel: " << telefono << " Nivel: " << nivel << "\n";
+        cout << "  Admin    - ID: " << id
+             << " | Cedula: " << cedula
+             << " | Nombre: " << nombre
+             << " | Email: " << email
+             << " | Cargo: " << cargo  // <-- Ahora podemos usar la variable 'cargo' de Empleado
+             << " | Nivel: " << nivel << "\n";
     }
 };
 
@@ -407,11 +417,21 @@ public:
         clientes.clear();
     }
 
-    Cliente* registrarCliente(const string& nombre, const string& email, const string& tel, const string& dir) {
-        Cliente* c = new Cliente(nombre, email, tel, dir);
+    Cliente* registrarCliente(const string& ced, const string& nombre, const string& email, const string& tel, const string& dir) {
+        Cliente* c = new Cliente(ced, nombre, email, tel, dir);
         clientes.push_back(c);
         cout << " Cliente '" << nombre << "' registrado (ID " << c->getId() << ")\n";
         return c;
+    }
+    
+    Cliente* buscarClientePorCedula(const string& cedula) const {
+        for (auto c : clientes)
+            if (c->getCedula() == cedula) return c;
+        return nullptr;
+    }
+
+    bool cedulaExiste(const string& cedula) const {
+        return buscarClientePorCedula(cedula) != nullptr;
     }
 
     Cliente* buscarCliente(int id) {
@@ -428,7 +448,7 @@ public:
         int idx = buscarIndice(id);
         if (idx == -1) return false;
         clientes[idx]->setDireccion(nuevaDir);
-        // no hay setter de telefono en Cliente en este diseño; si lo hubiera, se llamaría aquí
+       
         cout << " Cliente ID " << id << " actualizado\n";
         return true;
     }
@@ -471,8 +491,8 @@ public:
         for (auto a : admins) delete a;
     }
 
-    Administrador* registrarAdmin(const string& nombre, const string& email, const string& tel, const string& nivel) {
-        Administrador* a = new Administrador(nombre, email, tel, nivel);
+    Administrador* registrarAdmin(const string& ced, const string& nombre, const string& email, const string& tel, const string& nivel) {
+        Administrador* a = new Administrador(ced, nombre, email, tel, nivel);
         admins.push_back(a);
         return a;
     }
@@ -584,54 +604,10 @@ int main() {
 
     Tienda tienda("AgroFresh Ecuador");
 
-    Administrador* admin = tienda.registrarAdmin("Carlos Andrade", "carlos@agrofresh.ec", "0987654321", "GERENTE");
+    Administrador* admin = tienda.registrarAdmin("1700000001", "Carlos Andrade", "carlos@agrofresh.ec", "0987654321", "GERENTE");
     tienda.setAdminActivo(admin);
 
     GestorClientes& gc = tienda.getGestorClientes();
-    Cliente* c1 = gc.registrarCliente("Ana Martinez", "ana@gmail.com", "0991234567", "Quito Norte");
-    Cliente* c2 = gc.registrarCliente("Luis Garcia", "luis@gmail.com", "0992345678", "Guayaquil");
-
-    Inventario& inv = tienda.getInventario();
-    inv.agregarProducto("Caja de Manzanas Premium", "Manzanas rojas seleccionadas, 10kg", 24.99, 50, "Frutas");
-    inv.agregarProducto("Bolsa de Quinua Organica", "Quinua blanca 1kg", 5.99, 100, "Granos");
-
-    // Pedido 1 para Ana
-    CarritoDeCompras carrito1(c1);
-    Producto* manzanas = inv.buscarProducto(1);
-    if (manzanas) carrito1.agregarItem(manzanas, 2);
-    carrito1.mostrarCarrito();
-
-    Pedido* p1 = tienda.crearPedido(carrito1, "2026-04-26");
-    if (p1) {
-        Pago* pago1 = new PagoTarjeta(p1->getTotal(), "2026-04-26", "4521", "Ana Martinez", "VISA");
-        tienda.procesarPago(p1, pago1);
-    }
-
-    // Pedido 2 para Ana (nueva fecha)
-    CarritoDeCompras carrito2Ana(c1);
-    Producto* quinuaAna = inv.buscarProducto(2);
-    if (quinuaAna) carrito2Ana.agregarItem(quinuaAna, 3);
-    carrito2Ana.mostrarCarrito();
-
-    Pedido* p2Ana = tienda.crearPedido(carrito2Ana, "2026-05-02");
-    if (p2Ana) {
-        Pago* pago2Ana = new PagoDigital(p2Ana->getTotal(), "2026-05-02", "PayPal", "ana@paypal");
-        tienda.procesarPago(p2Ana, pago2Ana);
-    }
-
-    // Pedido para Luis
-    CarritoDeCompras carritoLuis(c2);
-    Producto* quinuaLuis = inv.buscarProducto(2);
-    if (quinuaLuis) carritoLuis.agregarItem(quinuaLuis, 5);
-    Pedido* pLuis = tienda.crearPedido(carritoLuis, "2026-04-26");
-    if (pLuis) {
-        Pago* pagoLuis = new PagoEfectivo(pLuis->getTotal(), "2026-04-26", 40.00);
-        tienda.procesarPago(pLuis, pagoLuis);
-    }
-
-    tienda.listarPedidos();
-    tienda.mostrarResumen();
-    tienda.generarReporteVentas();
-
-    return 0;
-}
+    
+    Cliente* c1 = gc.registrarCliente("1700000003", "Ana Martinez", "ana@gmail.com", "0991234567", "Quito Norte");
+    Cliente* c2 = gc.registrarCliente("1700000004", "Luis Garcia", "luis@gmail.com", "0992345678", "Guayaquil");
