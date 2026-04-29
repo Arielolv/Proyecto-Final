@@ -3,6 +3,25 @@
 #include <vector>
 
 using namespace std;
+// UTILIDADES GENERALES
+
+int leerOpcion() {
+    int op;
+    cin >> op;
+    cin.ignore(1000, '\n');
+    return op;
+}
+
+string leerTexto(const string& prompt) {
+    cout << prompt;
+    string s;
+    getline(cin, s);
+    return s;
+}
+
+string fechaHoy() {
+    return "2026-04-29";
+}
 
 //  MODULO 1 – USUARIOS
 
@@ -56,26 +75,82 @@ public:
     }
 };
 
-// Administrador 
+// Empleado (clase base 2)
+class Empleado : public Usuario {
+protected:
+    string cargo;
+public:
+    Empleado(const string& ced, const string& n, const string& e, const string& t, const string& c)
+        : Usuario(ced, n, e, t), cargo(c) {}
 
+    string getCargo() const { return cargo; }
+    string getTipo()  const override { return "Empleado"; }
+
+    void mostrarInfo() const override {
+        cout << "  Empleado - ID: " << id << " | Cedula: " << cedula
+             << " | Nombre: " << nombre << " | Cargo: " << cargo << "\n";
+    }
+};
+
+// Vendedor
+class Vendedor : public Empleado {
+private:
+    double porcentajeComision;
+    double totalVendido;
+    int    numVentas;
+    vector<int> pedidosGestionados;
+
+public:
+    Vendedor(const string& ced, const string& n, const string& e, const string& t, double porcentaje = 5.0)
+        : Empleado(ced, n, e, t, "Vendedor"), porcentajeComision(porcentaje), totalVendido(0.0), numVentas(0) {}
+
+    double getPorcentajeComision() const { return porcentajeComision; }
+    double getTotalVendido()       const { return totalVendido; }
+    int    getNumVentas()          const { return numVentas; }
+
+    double calcularComision() const {
+        return totalVendido * (porcentajeComision / 100.0);
+    }
+
+    void registrarVenta(int pedidoId, double monto) {
+        pedidosGestionados.push_back(pedidoId);
+        totalVendido += monto;
+        numVentas++;
+    }
+
+    void mostrarComisiones() const {
+        cout.setf(ios::fixed); cout.precision(2);
+        cout << "\n  ---- COMISIONES DE " << nombre << " ----\n"
+             << "  Ventas realizadas   : " << numVentas << "\n"
+             << "  Total vendido       : $" << totalVendido << "\n"
+             << "  Porcentaje comision : " << porcentajeComision << "%\n"
+             << "  Comision ganada     : $" << calcularComision() << "\n";
+    }
+
+    string getTipo() const override { return "Vendedor"; }
+
+    void mostrarInfo() const override {
+        cout.setf(ios::fixed); cout.precision(2);
+        cout << "  Vendedor - ID: " << id << " | Cedula: " << cedula
+             << " | Nombre: " << nombre << " | Comision: " << porcentajeComision 
+             << "% | Total vendido: $" << totalVendido << "\n";
+    }
+};
+
+// Administrador 
 class Administrador : public Empleado {
 private:
     string nivel;
 public:
-    // Fíjate que ahora llamamos a Empleado y le pasamos "Administrador" como su cargo fijo
-    Administrador(const string& ced, const string& n, const string& e,
-                  const string& t, const string& niv)
+    Administrador(const string& ced, const string& n, const string& e, const string& t, const string& niv)
         : Empleado(ced, n, e, t, "Administrador"), nivel(niv) {}
 
     string getNivel() const { return nivel; }
     string getTipo()  const override { return "Administrador"; }
 
     void mostrarInfo() const override {
-        cout << "  Admin    - ID: " << id
-             << " | Cedula: " << cedula
-             << " | Nombre: " << nombre
-             << " | Email: " << email
-             << " | Cargo: " << cargo  // <-- Ahora podemos usar la variable 'cargo' de Empleado
+        cout << "  Admin    - ID: " << id << " | Cedula: " << cedula
+             << " | Nombre: " << nombre << " | Email: " << email
              << " | Nivel: " << nivel << "\n";
     }
 };
@@ -472,38 +547,61 @@ public:
 
 class Tienda {
 private:
-    string nombre;
-    Inventario inventario;
+    string         nombre;
+    Inventario     inventario;
     GestorClientes gestorClientes;
-    vector<Pedido*> pedidos;
-    vector<Pago*> pagos;
+    vector<Pedido*>        pedidos;
+    vector<Pago*>          pagos;
     vector<Administrador*> admins;
-    Administrador* adminActivo;
+    vector<Vendedor*>      vendedores;
 
 public:
-    explicit Tienda(const string& n) : nombre(n), adminActivo(nullptr) {
-        cout << " TechStore '" << nombre << "' iniciada\n";
-    }
+    explicit Tienda(const string& n) : nombre(n) {}
 
     ~Tienda() {
-        for (auto p : pedidos) delete p;
-        for (auto pay : pagos) delete pay;
-        for (auto a : admins) delete a;
+        for (auto p : pedidos)    delete p;
+        for (auto p : pagos)      delete p;
+        for (auto a : admins)     delete a;
+        for (auto v : vendedores) delete v;
     }
 
-    Administrador* registrarAdmin(const string& ced, const string& nombre, const string& email, const string& tel, const string& nivel) {
-        Administrador* a = new Administrador(ced, nombre, email, tel, nivel);
+    Inventario&     getInventario()     { return inventario; }
+    GestorClientes& getGestorClientes() { return gestorClientes; }
+    string          getNombre()   const { return nombre; }
+
+    // Registro de usuarios
+    Administrador* registrarAdmin(const string& ced, const string& n, const string& e, const string& t, const string& niv) {
+        Administrador* a = new Administrador(ced, n, e, t, niv);
         admins.push_back(a);
         return a;
     }
-    void setAdminActivo(Administrador* a) { adminActivo = a; }
 
-    Inventario& getInventario() { return inventario; }
-    GestorClientes& getGestorClientes() { return gestorClientes; }
+    Vendedor* registrarVendedor(const string& ced, const string& n, const string& e, const string& t, double porc = 5.0) {
+        Vendedor* v = new Vendedor(ced, n, e, t, porc);
+        vendedores.push_back(v);
+        cout << "  Vendedor '" << n << "' registrado (ID " << v->getId() << ").\n";
+        return v;
+    }
 
-    // Crear pedido: además de crear el pedido, actualiza historial del cliente
+    // Busqueda polimórfica
+    Usuario* buscarPorCedula(const string& ced, string& tipoOut) {
+        for (auto a : admins)
+            if (a->getCedula() == ced) { tipoOut = "Administrador"; return a; }
+        for (auto v : vendedores)
+            if (v->getCedula() == ced) { tipoOut = "Vendedor"; return v; }
+        Cliente* c = gestorClientes.buscarClientePorCedula(ced);
+        if (c) { tipoOut = "Cliente"; return c; }
+        return nullptr;
+    }
+
+    bool cedulaRegistrada(const string& ced) {
+        string tipo;
+        return buscarPorCedula(ced, tipo) != nullptr;
+    }
+
+    // Pedidos
     Pedido* crearPedido(CarritoDeCompras& carrito, const string& fecha) {
-        if (carrito.estaVacio()) { cout << " Carrito vacio\n"; return nullptr; }
+        if (carrito.estaVacio()) { cout << "  El carrito esta vacio.\n"; return nullptr; }
 
         Pedido* pedido = new Pedido(carrito.getCliente(), fecha);
         const auto& items = carrito.getItems();
@@ -511,32 +609,25 @@ public:
 
         for (int i = 0; i < (int)items.size(); i++) {
             if (!items[i]->reducirStock(cants[i])) {
-                cout << " Stock insuficiente: '" << items[i]->getNombre() << "'\n";
+                cout << "  Stock insuficiente: '" << items[i]->getNombre() << "'.\n";
                 delete pedido;
                 return nullptr;
             }
-            pedido->agregarLinea(items[i]->getId(), items[i]->getNombre(),
-                                 items[i]->getPrecio(), cants[i]);
+            pedido->agregarLinea(items[i]->getId(), items[i]->getNombre(), items[i]->getPrecio(), cants[i]);
         }
 
-        // registrar pedido en cliente
         carrito.getCliente()->agregarPedido(pedido->getId());
         pedidos.push_back(pedido);
         carrito.vaciar();
 
-        if (adminActivo)
-            adminActivo->gestionar("Pedido #" + to_string(pedido->getId()) + " creado");
-
-        cout.setf(ios::fixed);
-        cout.precision(2);
-        cout << " Pedido #" << pedido->getId()
-             << " confirmado  Total: $" << pedido->getTotal() << "\n";
+        cout.setf(ios::fixed); cout.precision(2);
+        cout << "  Pedido #" << pedido->getId() << " creado. Total: $" << pedido->getTotal() << "\n";
         return pedido;
     }
 
     bool procesarPago(Pedido* pedido, Pago* pago) {
         if (!pedido || !pago) return false;
-        cout << "\n----- Procesando pago para Pedido #" << pedido->getId() << " -----\n";
+        cout << "\n  ---- Procesando pago para Pedido #" << pedido->getId() << " ----\n";
         pago->mostrarDetalle();
         if (pago->procesar()) {
             pago->generarRecibo();
@@ -548,54 +639,107 @@ public:
     }
 
     void listarPedidos() const {
-        cout << "\n----- PEDIDOS (" << pedidos.size() << ") -----\n";
+        cout << "\n  ---- PEDIDOS (" << pedidos.size() << ") ----\n";
+        if (pedidos.empty()) { cout << "  (sin pedidos)\n"; return; }
         for (const auto& p : pedidos) p->mostrar();
     }
 
-    void mostrarResumen() const {
-        cout << "\n___________________\n"
-             << " | RESUMEN TIENDA: " << nombre << "\n"
-             << " | Productos en inventario : " << inventario.getTotalProductos() << "\n"
-             << " | Clientes registrados    : " << gestorClientes.getTotalClientes() << "\n"
-             << " | Pedidos realizados      : " << pedidos.size() << "\n"
-             << " | Pagos procesados        : " << pagos.size() << "\n\n";
+    void listarVendedores() const {
+        cout << "\n  ---- VENDEDORES (" << vendedores.size() << ") ----\n";
+        if (vendedores.empty()) { cout << "  (sin vendedores)\n"; return; }
+        for (auto v : vendedores) {
+            v->mostrarInfo();
+            v->mostrarComisiones();
+            cout << "  --\n";
+        }
     }
 
-    // Reporte simplificado: total de ingresos y cliente más activo (usa historial de clientes)
+    void mostrarResumen() const {
+        cout << "\n  ---- RESUMEN: " << nombre << " ----\n"
+             << "  Productos en inventario : " << inventario.getTotalProductos() << "\n"
+             << "  Clientes registrados    : " << gestorClientes.getTotalClientes() << "\n"
+             << "  Pedidos realizados      : " << pedidos.size() << "\n"
+             << "  Pagos procesados        : " << pagos.size() << "\n";
+    }
+
     void generarReporteVentas() const {
-        cout << "\n=== REPORTE DE VENTAS ===\n";
-        if (pedidos.empty()) {
-            cout << " No hay pedidos registrados.\n";
-            return;
-        }
+        cout << "\n  ---- REPORTE DE VENTAS ----\n";
+        if (pedidos.empty()) { cout << "  No hay pedidos registrados.\n"; return; }
 
         double totalVentas = 0.0;
         for (auto p : pedidos) totalVentas += p->getTotal();
 
-        // Buscar cliente más activo recorriendo la lista de clientes
         const vector<Cliente*>& clientes = gestorClientes.getClientes();
         const Cliente* clienteMasActivo = nullptr;
         int maxPedidos = 0;
         for (const auto& c : clientes) {
-            int cantidad = (int)c->getHistorial().size();
-            if (cantidad > maxPedidos) {
-                maxPedidos = cantidad;
-                clienteMasActivo = c;
-            }
+            int cant = (int)c->getHistorial().size();
+            if (cant > maxPedidos) { maxPedidos = cant; clienteMasActivo = c; }
         }
 
-        cout.setf(ios::fixed);
-        cout.precision(2);
-        cout << " Total ingresos: $" << totalVentas << "\n";
-        cout << " Pedidos procesados: " << pedidos.size() << "\n";
+        cout.setf(ios::fixed); cout.precision(2);
+        cout << "  Total ingresos     : $" << totalVentas << "\n"
+             << "  Pedidos procesados : " << pedidos.size() << "\n";
         if (clienteMasActivo) {
-            cout << " Cliente más activo: " << clienteMasActivo->getNombre()
+            cout << "  Cliente mas activo : " << clienteMasActivo->getNombre()
                  << " (ID " << clienteMasActivo->getId() << ") con " << maxPedidos << " pedidos\n";
-        } else {
-            cout << " No se pudo determinar cliente más activo.\n";
         }
     }
 };
+
+// FLUJOS REUTILIZABLES
+
+Pago* solicitarPago(double total) {
+    cout.setf(ios::fixed); cout.precision(2);
+    cout << "\n  ---- METODO DE PAGO (Total: $" << total << ") ----\n"
+         << "  1. Tarjeta\n  2. Efectivo\n  3. Pago digital\n  Opcion: ";
+    int op = leerOpcion();
+
+    if (op == 1) {
+        string dig = leerTexto("  Ultimos 4 digitos de la tarjeta: ");
+        string tit = leerTexto("  Nombre del titular: ");
+        string tip = leerTexto("  Tipo (VISA / MASTERCARD): ");
+        return new PagoTarjeta(total, fechaHoy(), dig, tit, tip);
+    } else if (op == 2) {
+        double pagado;
+        cout << "  Monto entregado: $";
+        cin >> pagado; cin.ignore(1000, '\n');
+        try {
+            return new PagoEfectivo(total, fechaHoy(), pagado);
+        } catch (const invalid_argument& ex) {
+            cout << "  Error: " << ex.what() << "\n";
+            return nullptr;
+        }
+    } else if (op == 3) {
+        string plat = leerTexto("  Plataforma (PayPal / Nequi / etc.): ");
+        string cta  = leerTexto("  Cuenta o numero: ");
+        return new PagoDigital(total, fechaHoy(), plat, cta);
+    }
+    cout << "  Opcion no valida. Pago cancelado.\n";
+    return nullptr;
+}
+
+bool flujoAgregarProductos(CarritoDeCompras& carrito, Inventario& inv) {
+    bool seguir = true;
+    while (seguir) {
+        inv.listarProductos();
+        cout << "\n  ID del producto a agregar (0 para terminar): ";
+        int pid = leerOpcion();
+        if (pid == 0) break;
+
+        Producto* p = inv.buscarProducto(pid);
+        if (!p) { cout << "  Producto no encontrado.\n"; continue; }
+
+        cout << "  Cantidad: ";
+        int cant = leerOpcion();
+        carrito.agregarItem(p, cant);
+        carrito.mostrarCarrito();
+
+        cout << "  Agregar otro producto? (1-Si / 0-No): ";
+        seguir = (leerOpcion() == 1);
+    }
+    return !carrito.estaVacio();
+}
 
 // DEMOSTRACION
 
